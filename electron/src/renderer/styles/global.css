@@ -1,0 +1,167 @@
+/* ─── Lobster Global Styles ───────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg-base:     #0d1117;
+  --bg-surface:  #161b22;
+  --bg-elevated: #1c2128;
+  --bg-hover:    #21262d;
+  --border:      #30363d;
+  --border-muted:#21262d;
+
+  --text-primary:   #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted:     #484f58;
+
+  --accent:        #f78166;
+  --accent-blue:   #58a6ff;
+  --accent-green:  #3fb950;
+  --accent-yellow: #d29922;
+  --accent-purple: #bc8cff;
+  --accent-pink:   #ff7eb6;
+
+  --node-click:   #1d6fa5;
+  --node-wait:    #926b00;
+  --node-loop:    #5a3d8f;
+  --node-if:      #8f3d6b;
+  --node-run:     #8f3d3d;
+
+  --sidebar-w: 240px;
+  --props-w:   280px;
+  --topbar-h:  48px;
+  --statusbar-h: 28px;
+  --logpanel-h: 180px;
+
+  --radius: 6px;
+  --radius-lg: 10px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-ui: 'Inter', system-ui, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.canvas-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.btn:hover { background: var(--bg-hover); border-color: var(--text-muted); }
+.btn:active { transform: scale(0.97); }
+
+.btn-primary {
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+  color: #fff;
+}
+.btn-primary:hover { opacity: 0.9; background: var(--accent-blue); }
+
+.btn-success {
+  background: var(--accent-green);
+  border-color: var(--accent-green);
+  color: #fff;
+}
+.btn-danger {
+  background: #da3633;
+  border-color: #da3633;
+  color: #fff;
+}
+.btn-icon {
+  padding: 5px 8px;
+  background: transparent;
+  border-color: transparent;
+}
+.btn-icon:hover { background: var(--bg-hover); border-color: var(--border); }
+
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Inputs ──────────────────────────────────────────────────────────────── */
+input, textarea, select {
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  padding: 5px 8px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+input:focus, textarea:focus { border-color: var(--accent-blue); }
+
+textarea { font-family: var(--font-mono); resize: vertical; }
+
+/* ── Misc ────────────────────────────────────────────────────────────────── */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.divider { border: none; border-top: 1px solid var(--border-muted); }
+
+/* ── React Flow overrides ────────────────────────────────────────────────── */
+.react-flow__background { background: var(--bg-base); }
+.react-flow__controls { border: 1px solid var(--border); background: var(--bg-surface); border-radius: var(--radius); }
+.react-flow__controls-button { background: var(--bg-surface); border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+.react-flow__controls-button:hover { background: var(--bg-hover); }
+.react-flow__minimap { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-surface) !important; }
+.react-flow__edge-path { stroke: var(--border) !important; }
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:hover .react-flow__edge-path { stroke: var(--accent-blue) !important; }
