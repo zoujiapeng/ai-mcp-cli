@@ -53,6 +53,10 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 executor = DSLExecutor(action_handler=action_handler)
 scheduler = TaskScheduler(executor)
 
+# 日志缓存 (供调试用)
+_executor_logs: list[dict] = []
+_MAX_LOGS = 1000
+
 
 def broadcast_event(event: str, data: dict):
     """向所有连接的客户端广播事件"""
@@ -64,7 +68,7 @@ executor.on("node_start", lambda **kw: broadcast_event("node_start", kw))
 executor.on("node_done", lambda **kw: broadcast_event("node_done", kw))
 executor.on("error", lambda **kw: broadcast_event("exec_error", kw))
 executor.on("state_change", lambda **kw: broadcast_event("state_change", kw))
-executor.on("log", lambda **kw: broadcast_event("log", kw))
+executor.on("log", lambda **kw: (_executor_logs.append({"ts": time.time(), "msg": kw.get("message", "")}) or len(_executor_logs) > _MAX_LOGS and _executor_logs.pop(0)) or broadcast_event("log", kw))
 
 scheduler.start()
 
@@ -234,6 +238,204 @@ def take_screenshot():
         return jsonify({"success": True, "image": b64, "format": "jpeg"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/logs", methods=["GET"])
+def get_logs():
+    """获取执行器日志"""
+    count = request.args.get("count", 50, type=int)
+    return jsonify({"logs": _executor_logs[-count:]})
+
+
+@app.route("/api/perception/ocr", methods=["POST"])
+def ocr_screen():
+    """对屏幕或指定区域进行 OCR 文字识别"""
+    data = request.get_json() or {}
+    region = data.get("region")  # [x,y,w,h]
+    target = data.get("target")  # 可选: 查找特定文字
+    try:
+        from perception.ocr import OCREngine
+        ocr = OCREngine()
+        if target:
+            result = ocr.find_text(target, region=region)
+            if result:
+                return jsonify({
+                    "success": True,
+                    "found": True,
+                    "text": result.text,
+                    "bbox": result.bbox,
+                    "center": result.center,
+                    "confidence": result.confidence,
+                })
+            return jsonify({"success": True, "found": False, "text": None})
+        else:
+            results = ocr.extract_all(region=region)
+            return jsonify({
+                "success": True,
+                "texts": [
+                    {"text": r.text, "bbox": r.bbox, "center": r.center, "confidence": r.confidence}
+                    for r in results
+                ],
+            })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/perception/find", methods=["POST"])
+def find_image():
+    """在屏幕上查找模板图像"""
+    data = request.get_json() or {}
+    target = data.get("target", "")
+    region = data.get("region")
+    threshold = data.get("threshold", 0.7)
+    try:
+        from perception.vision import TemplateMatcher
+        matcher = TemplateMatcher()
+        result = matcher.find(target, region=region, threshold=threshold)
+        if result:
+            return jsonify({
+                "success": True,
+                "found": True,
+                "bbox": result,
+                "center": [(result[0] + result[2]) // 2, (result[1] + result[3]) // 2],
+            })
+        return jsonify({"success": True, "found": False})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/env", methods=["GET"])
+def check_env():
+    """检查 Python 运行环境"""
+    info = {
+        "python": sys.version,
+        "platform": sys.platform,
+        "simulation_mode": SIMULATION_MODE,
+        "backend_url": f"http://localhost:{os.getenv('LOBSTER_PORT', '7788')}",
+    }
+    # 检查关键依赖
+    deps = {}
+    for mod_name, import_name in [
+        ("requests", "requests"),
+        ("opencv", "cv2"),
+        ("numpy", "numpy"),
+        ("Pillow", "PIL"),
+        ("pyautogui", "pyautogui"),
+        ("mss", "mss"),
+        ("pytesseract", "pytesseract"),
+        ("flask", "flask"),
+        ("flask-cors", "flask_cors"),
+        ("flask-socketio", "flask_socketio"),
+        ("anthropic", "anthropic"),
+    ]:
+        try:
+            __import__(import_name)
+            deps[mod_name] = True
+        except ImportError:
+            deps[mod_name] = False
+    info["dependencies"] = deps
+
+    # 感知模块状态
+    try:
+        from perception.vision import ScreenCapture
+        ScreenCapture.capture()
+        info["screen_capture"] = True
+    except Exception:
+        info["screen_capture"] = False
+
+    try:
+        from perception.ocr import OCREngine
+        ocr = OCREngine()
+        ocr.extract_all()
+        info["ocr_available"] = True
+    except Exception:
+        info["ocr_available"] = False
+
+    return jsonify(info)
+
+
+@app.route("/api/action/test", methods=["POST"])
+def test_action():
+    """测试单个动作 (不经过 DSL 执行器)"""
+    data = request.get_json() or {}
+    action = data.get("action", "click")
+    params = data.get("params", {})
+
+    if SIMULATION_MODE or action_handler is None:
+        return jsonify({"success": True, "simulated": True, "action": action, "params": params})
+
+    try:
+        if action == "click":
+            target = params.get("target", "")
+            result = action_handler.clicker.click(target, timeout=params.get("timeout", 10))
+            return jsonify({"success": True, "clicked": result})
+        elif action == "wait":
+            condition = params.get("condition", "")
+            result = action_handler.waiter.wait(condition, timeout=params.get("timeout", 30))
+            return jsonify({"success": True, "condition_met": result})
+        elif action == "ocr":
+            target = params.get("target", "")
+            result = action_handler.ocr.find_text(target)
+            if result:
+                return jsonify({"success": True, "found": True, "text": result.text, "center": result.center})
+            return jsonify({"success": True, "found": False})
+        elif action == "type":
+            text = params.get("text", "")
+            from interaction.actions import HumanKeyboard
+            HumanKeyboard.type_text(text)
+            return jsonify({"success": True, "typed": True})
+        elif action == "macro":
+            name = params.get("name", "")
+            result = action_handler._handle_macro(name, ctx=None)
+            return jsonify({"success": True, "macro_executed": result})
+        else:
+            return jsonify({"success": False, "error": f"未知动作: {action}"}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/dsl/run-sync", methods=["POST"])
+def run_dsl_sync():
+    """同步执行 DSL (阻塞直到完成, 返回日志和结果)"""
+    data = request.get_json()
+    source = data.get("dsl", "")
+
+    if not source.strip():
+        return jsonify({"success": False, "error": "DSL 内容为空"}), 400
+
+    start = time.time()
+    logs_before = len(_executor_logs)
+
+    try:
+        # 验证语法
+        DSLParser.from_string(source)
+
+        ctx = ExecutionContext(
+            max_loops=data.get("max_loops", 10),
+            retry_limit=data.get("retry_limit", 1),
+            timeout=data.get("timeout", 30.0),
+        )
+
+        # 同步执行
+        executor.run_dsl_sync(source, ctx=ctx)
+        elapsed = time.time() - start
+
+        logs = _executor_logs[logs_before:]
+        return jsonify({
+            "success": True,
+            "state": executor.state.value,
+            "elapsed": round(elapsed, 2),
+            "logs": [{"ts": l["ts"], "msg": l["msg"]} for l in logs],
+        })
+    except Exception as e:
+        elapsed = round(time.time() - start, 2)
+        logs = _executor_logs[logs_before:]
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "elapsed": elapsed,
+            "logs": [{"ts": l["ts"], "msg": l["msg"]} for l in logs],
+        }), 400
 
 
 # ── WebSocket 事件 ────────────────────────────────────────────────

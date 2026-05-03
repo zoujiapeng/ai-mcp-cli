@@ -3,6 +3,7 @@ dist/
 dist-main/
 *.pyc
 __pycache__/
+*.egg-info/
 .env
 *.lobster
 .DS_Store

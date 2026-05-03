@@ -1,3 +1,3 @@
 @echo off
 REM Lobster CLI - Windows 入口
-python "%~dp0cli\lobster.py" %*
+py -3 "%~dp0cli\lobster.py" %*
